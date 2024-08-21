@@ -3,15 +3,16 @@ package com.kamical.redis.app.impl;
 import com.kamical.redis.app.service.RedisService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.CacheManager;
+import org.springframework.data.redis.core.RedisOperations;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.SessionCallback;
 import org.springframework.stereotype.Service;
 
-import java.util.Collections;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Supplier;
 
 @Service
-public class RedisServiceImpl<K, V> implements RedisService<K,V> {
+public class RedisServiceImpl<K, V> implements RedisService<K, V> {
 
     private static String WILDCARD = "*";
 
@@ -23,83 +24,96 @@ public class RedisServiceImpl<K, V> implements RedisService<K,V> {
         this.redisTemplate = redisTemplate;
     }
 
-    @Autowired
-    private CacheManager cacheManager;
 
-
-    public CacheManager getCacheManager() {
-        return cacheManager;
-    }
-
-    public void setCacheManager(CacheManager cacheManager) {
-        this.cacheManager = cacheManager;
-    }
-
-    // @Override
-    public Set<Object> readAllDataFromRedis() {
-
-        return Collections.singleton(redisTemplate.keys((K) WILDCARD));
-    }
-
-    //@Override
-    public Object readDataFromRedisWithKey(final String key) {
-        return redisTemplate.keys((K) (key + WILDCARD));
-    }
-
-    //@Override
-    public void evictAll() {
-
-        getCacheManager()
-                .getCacheNames()
-                .forEach(
-                        cacheName -> getCacheManager().getCache(cacheName).clear()
-                );
-    }
-
-    // @Override
-    public void evictByKey(final String key) {
-
-        getCacheManager()
-                .getCache(key)
-                .clear();
-    }
-
-
+    @Override
     public void writeToRedis(K key, V value) {
         put(key, value, redisTemplate);
     }
 
+    @Override
+    public void batchWrite(Map<K, V> map) {
+        // Use the executePipelined method with a SessionCallback to perform batch operations
+        redisTemplate.executePipelined(new SessionCallback<Object>() {
+            @Override
+            public <K, V> Object execute(RedisOperations<K, V> operations) {
+                map.forEach((key, value) -> {
+                    operations.opsForValue().set((K) key, (V) value);
+                });
+                return null;
+            }
+        });
+    }
+
+    @Override
+    public List<V> readDataWithWildCard(K key) {
+        Set<K> keys = redisTemplate.keys((K) (key + WILDCARD));
+        List<V> res = new ArrayList<>();
+        if (keys != null) {
+            for (K k1 : keys) {
+                V value = redisTemplate.opsForValue().get(k1);
+                res.add(value);
+            }
+
+        }
+        return res;
+        //return List.of();
+    }
+
+    @Override
     public V readFromRedis(K key) {
         return get(key, redisTemplate);
     }
 
+    @Override
+    public Map<K, V> readAll() {
+        Set<K> keys = redisTemplate.keys((K) WILDCARD);
+        Map<K, V> res = new HashMap<>();
+        if (keys != null) {
+            for (K k1 : keys) {
+                V value = redisTemplate.opsForValue().get(k1);
+                res.put(k1, value);
+            }
+        }
+        return res;
+        // return Map.of();
+    }
+
+    @Override
+    public Set<Object> readAllDataFroRedis() {
+        return Set.of(redisTemplate.keys((K) WILDCARD));
+    }
+
+    @Override
     public void deleteKey(K key) {
         redisTemplate.delete(key);
     }
 
+    @Override
     public V getAndDelete(K key) {
-        // Step 1: Retrieve the value associated with the key
-        V value = redisTemplate.opsForValue().get(key);
-        // Step 2: Delete the key from Redis
+        V val = redisTemplate.opsForValue().get(key);
         redisTemplate.delete(key);
-        // Return the retrieved value
-        return value;
+        return val;
     }
 
-    public V getOrLoad(K key, Supplier<V> loader) {
-        // Attempt to get the value from Redis
-        V value = redisTemplate.opsForValue().get(key);
+    @Override
+    public void deleteAll() {
+        Set<K> keys = redisTemplate.keys((K) WILDCARD);
+        if (keys != null && !keys.isEmpty()) {
+            redisTemplate.delete(keys);
+        }
+    }
 
-        if (value == null) {
-            // If the value is not in Redis, load it using the provided loader
-            value = loader.get();
-            // Store the loaded value in Redis
-            redisTemplate.opsForValue().set(key, value);
+    @Override
+    public V getOrLoad(K key, Supplier<V> loader) {
+        V val = redisTemplate.opsForValue().get(key);
+
+        if (val != null) {
+            val = loader.get();
+            redisTemplate.opsForValue().set(key, val);
         }
 
-        return value;
+        return val;
     }
-
 
     private void put(K key, V value, RedisTemplate<K, V> redisTemplate) {
         redisTemplate.opsForValue().set(key, value);

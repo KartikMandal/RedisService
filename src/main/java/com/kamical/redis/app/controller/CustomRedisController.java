@@ -4,6 +4,8 @@ import com.kamical.redis.app.impl.RedisServiceImpl;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -22,9 +24,24 @@ public class CustomRedisController<K, V> {
         redisServiceImpl.writeToRedis(key, value);
     }
 
+    @PostMapping("/batch-write")
+    public void batchWriteValue(@RequestBody Map<K, V> map) {
+        redisServiceImpl.batchWrite(map);
+    }
+
     @GetMapping("/read")
     public V readValue(@RequestParam K key) {
         return redisServiceImpl.readFromRedis(key);
+    }
+
+    @GetMapping("/read-all")
+    public Map<K, V> readAllValue() {
+        return redisServiceImpl.readAll();
+    }
+
+    @GetMapping("/read-all-key-basic")
+    public List<V> readAllValueKeyBasic(@RequestParam K key) {
+        return redisServiceImpl.readDataWithWildCard(key);
     }
 
     @DeleteMapping("/delete")
@@ -32,9 +49,9 @@ public class CustomRedisController<K, V> {
         redisServiceImpl.deleteKey(key);
     }
 
-    @GetMapping("/get-or-load")
-    public String getOrGenerateUUID(@RequestParam String key) {
-        return getOrGenerateUUID(key);
+    @DeleteMapping("/delete-all")
+    public void deleteAllKey() {
+        redisServiceImpl.deleteAll();
     }
 
     @DeleteMapping("/get-and-delete")
@@ -42,7 +59,10 @@ public class CustomRedisController<K, V> {
         return redisServiceImpl.getAndDelete(key);
     }
 
-
+    @GetMapping("/get-or-load")
+    public String getOrGenerateUUID(@RequestParam String key) {
+        return getOrGenerateUUID(key);
+    }
 
     private String getOrGenerateUUID(K key) {
         return (String) redisServiceImpl.getOrLoad(key, () -> {

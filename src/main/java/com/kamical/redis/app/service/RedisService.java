@@ -1,24 +1,30 @@
 package com.kamical.redis.app.service;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
 
-public interface RedisService <K,V>{
+public interface RedisService<K, V> {
 
-    Set<Object> readAllDataFromRedis();
+    void writeToRedis(final K key, final V value);
 
-    Object readDataFromRedisWithKey(final String key);
+    void batchWrite(final Map<K, V> map);
 
-    void evictAll();
+    List<V> readDataWithWildCard(final K key);
 
-    void evictByKey(final String key);
+    V readFromRedis(final K key);
 
-    void writeToRedis(K key, V value);
+    Map<K, V> readAll();
 
-    V readFromRedis(K key);
+    Set<Object> readAllDataFroRedis();
+
+    void deleteKey(final K key);
 
     V getAndDelete(K key);
 
-    V getOrLoad(K key, Supplier<V> loader);
+    void deleteAll();
+
+    V getOrLoad(final K key, final Supplier<V> loader);
 
 }
